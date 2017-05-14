@@ -16,7 +16,7 @@
 #define JOINT_NUM 24      // number of joints
 
 #define STARTX            0.0    // Initial position of Robot
-#define STARTY            0.0    // Initial position of Robot
+// #define STARTY            0.0    // Initial position of Robot
 #define STARTZ            0.629  // Initial position of Robot
 #define TORSO_LENGTH      0.25   // x axis
 #define TORSO_WIDTH       0.27   // y axis
@@ -178,7 +178,7 @@ static void command(int cmd);
 static void nearCallback(void *, dGeomID, dGeomID);
 static void simLoop(int pause);
 static void drawRobot();
-static void makeRobot();
+static void makeRobot(int i);
 static void readLinkParam();
 static void readJointParam();
 static void control(int jointID, dReal target);

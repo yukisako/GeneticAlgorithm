@@ -23,6 +23,9 @@
 #pragma warning(disable:4244 4305) // for VC++, no precision loss complaints
 #endif
 
+double STARTY = 0.0;
+
+
 int step = 0;
 static int sw = 0;
 
@@ -98,7 +101,7 @@ static void restart(){
     dWorldSetERP(world, 0.9);
     dWorldSetCFM(world, 1e-4);
 
-    makeRobot();
+    makeRobot(1);
 
     // dsSimulationLoop(argc_tmp, *argv_tmp, 800, 600, &fn);
 }
@@ -361,8 +364,9 @@ static void simLoop(int pause)
     drawRobot();
 }
 
-static void readLinkParam()
+static void readLinkParam(int y)
 {
+    STARTY = STARTY + y;
     rlink[TORSO].lx = TORSO_LENGTH;
     rlink[TORSO].ly = TORSO_WIDTH;
     rlink[TORSO].lz = TORSO_HEIGHT;
@@ -880,9 +884,9 @@ void readJointParam()
     rjoint[RIGHT_FOOT_ROLL].link[1]  =   RIGHT_FOOT;
 }
 
-static void makeRobot()
+static void makeRobot(int robotNum)
 {
-    readLinkParam();
+    readLinkParam(robotNum);
     readJointParam();
 
     for (int i=0; i< BODY_NUM; i++)
@@ -952,8 +956,7 @@ int main(int argc, char *argv[]){
     dWorldSetERP(world, 0.9);
     dWorldSetCFM(world, 1e-4);
 
-    makeRobot();
-
+    makeRobot(0);
     dsSimulationLoop(argc, argv, 800, 600, &fn);
 
     dJointGroupDestroy(contactgroup);
