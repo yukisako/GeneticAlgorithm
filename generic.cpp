@@ -18,15 +18,21 @@
 // 2008-09-02: add dInitODE() and dCloseODE() for ODE-0.10.0
 
 #include "original.h"
-
+#include <stdlib.h>
 #ifdef MSVC
 #pragma warning(disable:4244 4305) // for VC++, no precision loss complaints
 #endif
 
 double STARTY = 0.0;
 int robotNum = 0;
+#define EXIST_ROBOT_NUM 100
 
-#define EXIST_ROBOT_NUM 10
+
+int action[EXIST_ROBOT_NUM][ACTION_NUM];
+FILE *fp;
+FILE *record;
+int currentGeneration;
+char filename[100];
 
 int step[EXIST_ROBOT_NUM];
 int sw[EXIST_ROBOT_NUM];
@@ -310,6 +316,93 @@ static void drawRobot(int robotNum)
     dsDrawSphere(result6,dBodyGetRotation(rlink[robotNum][0].id),(float) 0.6 * myradius);
 }
 
+void evaluation(){
+    //ロボット個体の評価関数
+    //ロボットは3000ステップ経過時の左足のX座標で評価する
+    int bestRobotNum = 0;
+    int secondRobotNum = 1;
+    double bestRobotX = 0;
+    double secondRobotX = 0;
+    for (int robotNum = 0; robotNum < EXIST_ROBOT_NUM; ++robotNum){
+        double *pos = (double *) dBodyGetPosition(rlink[robotNum][LEFT_FOOT].id);
+        if(bestRobotX < pos[0]){
+            //pos[0]がx座標
+            bestRobotX = pos[0];
+            bestRobotNum = robotNum;
+        } else if (secondRobotX < pos[0]){
+            //1番ではないが2番のとき
+            secondRobotX = pos[0];
+            secondRobotNum = robotNum;
+        }
+        printf("ロボット%dのX=%f\n",robotNum,pos[0]);
+    }
+    
+    printf("トップが%d番の%f[m]，次が%d番の%f[m]です．\n",bestRobotNum,bestRobotX,secondRobotNum,secondRobotX);
+    if((record=fopen("record.txt","a"))==NULL){
+        printf("error\n");
+        exit(1);
+    }
+    fprintf(record,"%004d世代: 1位%f[m]，2位の%f[m]\n",  currentGeneration,bestRobotX,secondRobotX);
+    fclose(record);
+
+    printf("\n優勝のロボット%dアクション\n",bestRobotNum);
+    for (int i = 0; i < ACTION_NUM; ++i){
+        printf("%d,",action[bestRobotNum][i]);
+    }
+
+    printf("\n準優勝ロボット%dアクション\n",secondRobotNum);
+    for (int i = 0; i < ACTION_NUM; ++i){
+        printf("%d,",action[secondRobotNum][i]);
+    }
+
+
+    //2つの親から新しい個体を生成
+    int newAction[EXIST_ROBOT_NUM][ACTION_NUM];
+
+    for (int i = 0; i < EXIST_ROBOT_NUM; ++i){
+        for (int j = 0; j < ACTION_NUM; ++j){
+            int random = rand();
+            printf("random:%d\n",random );
+            if(random % 200 == 0){
+                //突然変異
+                newAction[i][j] = rand()%8;
+            } else if(random % 2 == 0){
+                newAction[i][j] = action[bestRobotNum][j];
+            } else {
+                newAction[i][j] = action[secondRobotNum][j];
+            }
+        }
+    }
+
+    currentGeneration++;
+    //新個体
+    for (int i = 0; i < EXIST_ROBOT_NUM; ++i){
+        printf("------------------\n");
+        printf("%d番目の新しいロボット\n",i );
+        for (int j = 0; j < ACTION_NUM; ++j){
+            printf("%d,",newAction[i][j] );
+        }
+        printf("\n");
+    }
+
+
+    sprintf(filename, "./gene_data/%04d.csv", currentGeneration);
+
+      if((fp=fopen(filename,"w"))==NULL){
+        printf("error\n");
+        exit(1);
+      }
+
+      for (int i = 0; i < EXIST_ROBOT_NUM; ++i){
+        for (int j = 0; j < ACTION_NUM; ++j){
+          fprintf(fp,"%d,",newAction[i][j]);
+        }
+        fprintf(fp,"\n");
+      }
+
+    exit(0);
+}
+
 static void simLoop(int pause)
 {
     // printf("step:%d:%d\n",step[0],step[1] );
@@ -325,79 +418,92 @@ static void simLoop(int pause)
 
     for (int robotNum = 0; robotNum < EXIST_ROBOT_NUM; robotNum++){
         // printf("r_knee[%d]:%f\n",robotNum,r_knee[robotNum]);
-        if (!pause){
+        if (step[robotNum] < ACTION_NUM){
             r_knee[robotNum] = 180.0 * dJointGetHingeAngle(rjoint[robotNum][RIGHT_KNEE_PITCH].id)/ M_PI;
+            // if (sw[robotNum] == 0 && r_knee[robotNum] >   knee_angle2[robotNum] -1){
+            //     sw[robotNum] = 1;
+            //     step[robotNum] = 0;
+            // }
+            // if (sw[robotNum] == 1 && r_knee[robotNum] <=   25.0){
+            //     sw[robotNum] = 2;
+            //     step[robotNum] = 0;
+            // }
+            // if (sw[robotNum] == 2 && r_knee[robotNum] >=  knee_angle2[robotNum]){
+            //     sw[robotNum] = 3;
+            //     step[robotNum] = 0;
+            // }
+            // sw[robotNum] = rand() % 4 + 1;
+            // printf("sw[%d]=%d\n",robotNum,sw[robotNum]);
 
-            if (sw[robotNum] == 0 && r_knee[robotNum] >   knee_angle2[robotNum] -1){
-                sw[robotNum] = 1;
-                step[robotNum] = 0;
-            }
-            if (sw[robotNum] == 1 && r_knee[robotNum] <=   25.0){
-                sw[robotNum] = 2;
-                step[robotNum] = 0;
-            }
-            if (sw[robotNum] == 2 && r_knee[robotNum] >=  knee_angle2[robotNum]){
-                sw[robotNum] = 3;
-                step[robotNum] = 0;
-            }
+
+            printf("%d体目の%dステップが%d",robotNum,step[robotNum],action[robotNum][step[robotNum]]);
             step[robotNum]++;
-            switch (sw[robotNum]){
+            switch (action[robotNum][step[robotNum]]){
             case 0:
                 left_hip_pitch       = -100.0;
-                right_hip_pitch      =  left_hip_pitch;
                 left_knee_pitch      =  knee_angle2[robotNum];
-                right_knee_pitch     =  left_knee_pitch;
                 left_foot_pitch      =  -75.0;
-                right_foot_pitch     =  left_foot_pitch;
                 left_shoulder_roll   =  120.0;
-                right_shoulder_roll  = -left_shoulder_roll;
                 left_shoulder_pitch  =   30.0;
-                right_shoulder_pitch =  left_shoulder_pitch;
                 break;
             case 1:
-                left_hip_pitch       =  0.0;
-                right_hip_pitch      =  left_hip_pitch;
-                left_knee_pitch      =  0.0;
-                right_knee_pitch     =  left_knee_pitch;
-                left_foot_pitch      =  0.0;
-                right_foot_pitch     =  left_foot_pitch;
-                left_shoulder_roll   =  0.0;
-                right_shoulder_roll  =  left_shoulder_roll;
-                left_shoulder_pitch  = - 90.0;
-                right_shoulder_pitch =  left_shoulder_pitch;
+                right_hip_pitch       = -100.0;
+                right_knee_pitch      =  knee_angle2[robotNum];
+                right_foot_pitch      =  -75.0;
+                right_shoulder_roll   =  120.0;
+                right_shoulder_pitch  =   30.0;
                 break;
             case 2:
-                left_hip_pitch       = -100.0;
-                right_hip_pitch      =  left_hip_pitch;
-                left_knee_pitch      =  120.0;
-                right_knee_pitch     =  left_knee_pitch ;
-                left_foot_pitch      =  -65,0; // - 65.0;
-                right_foot_pitch     =  left_foot_pitch;
-                left_shoulder_roll   =  180.0;
-                right_shoulder_roll  = - left_shoulder_roll;
+                left_hip_pitch       =  0.0;
+                left_knee_pitch      =  0.0;
+                left_foot_pitch      =  0.0;
+                left_shoulder_roll   =  0.0;
                 left_shoulder_pitch  = - 90.0;
-                right_shoulder_pitch = left_shoulder_pitch;
                 break;
             case 3:
-                if (step[robotNum] < recovery_step){
+                right_hip_pitch       =  0.0;
+                right_knee_pitch      =  0.0;
+                right_foot_pitch      =  0.0;
+                right_shoulder_roll   =  0.0;
+                right_shoulder_pitch  = - 90.0;
+                break;
+            case 4:
+                left_hip_pitch       = -100.0;
+                left_knee_pitch      =  120.0;
+                left_foot_pitch      =  -65,0; // - 65.0;
+                left_shoulder_roll   =  180.0;
+                left_shoulder_pitch  = - 90.0;
+                break;
+            case 5:
+                right_hip_pitch       = -100.0;
+                right_knee_pitch      =  120.0;
+                right_foot_pitch      =  -65,0; // - 65.0;
+                right_shoulder_roll   =  180.0;
+                right_shoulder_pitch  = - 90.0;
+                break;
+            case 6:
+                // if (step[robotNum] < recovery_step){
                     left_hip_pitch       = - 100 + step[robotNum] * 100 / recovery_step;
                     right_hip_pitch      =   left_hip_pitch;
                     left_knee_pitch      =   120 - step[robotNum] * 120 / recovery_step;
                     right_knee_pitch     =   left_knee_pitch;
                     left_foot_pitch      = - 65 + step[robotNum] *  60 / recovery_step;
                     right_foot_pitch     =   left_foot_pitch;
-                } else{
-                    left_hip_pitch       =  0.0;
-                    right_hip_pitch      =  left_hip_pitch;
-                    left_knee_pitch      =  0.0;
-                    right_knee_pitch     =  left_knee_pitch;
-                    left_foot_pitch      =  -9.0;
-                    right_foot_pitch     =  left_foot_pitch;
+                // }
 
-                    //最初へ
-                    sw[robotNum] = 0;
-                    step[robotNum] = 0;
-                }
+            case 7:
+                // } else{
+                left_hip_pitch       =  0.0;
+                right_hip_pitch      =  left_hip_pitch;
+                left_knee_pitch      =  0.0;
+                right_knee_pitch     =  left_knee_pitch;
+                left_foot_pitch      =  -9.0;
+                right_foot_pitch     =  left_foot_pitch;
+
+                //     //最初へ
+                //     sw[robotNum] = 0;
+                //     step[robotNum] = 0;
+                // }
                 left_shoulder_roll   =   0.0;
                 right_shoulder_roll  =   left_shoulder_roll;
                 left_shoulder_pitch  =   0.0;
@@ -438,24 +544,28 @@ static void simLoop(int pause)
 
             controlMotor(robotNum);
 
-
-
             // printf("%d\n",robotNum );
+        } else {
+            evaluation();
         }
         dJointGroupEmpty(contactgroup);
         drawRobot(robotNum);
-
-        printf("sw=%2d right knee=%5.1f right hip=%5.1f\r",sw[robotNum], r_knee[robotNum], r_hip[robotNum]);
-        printf("sw=%2d right foot=%5.1f left foot=%5.1f\n",sw[robotNum], right_foot_pitch_vec[robotNum], left_foot_pitch_vec[robotNum]);
-        printf("sw=%2d right hip =%5.1f left hip  =%5.1f\n",sw[robotNum], right_hip_pitch_vec[robotNum],  left_hip_pitch_vec[robotNum]);
+        printf("\n");
+        // printf("sw=%2d right knee=%5.1f right hip=%5.1f\r",sw[robotNum], r_knee[robotNum], r_hip[robotNum]);
+        // printf("sw=%2d right foot=%5.1f left foot=%5.1f\n",sw[robotNum], right_foot_pitch_vec[robotNum], left_foot_pitch_vec[robotNum]);
+        // printf("sw=%2d right hip =%5.1f left hip  =%5.1f\n",sw[robotNum], right_hip_pitch_vec[robotNum],  left_hip_pitch_vec[robotNum]);
     }
             dSpaceCollide(space,0,&nearCallback);
             dWorldStep(world,0.005);
 }
 
+
+
+
+
 static void readLinkParam(int robotNum)
 {
-    STARTY = robotNum;
+    STARTY = robotNum*3;
     printf("%f\n", STARTY);
     rlink[robotNum][TORSO].lx = TORSO_LENGTH;
     rlink[robotNum][TORSO].ly = TORSO_WIDTH;
@@ -1353,6 +1463,36 @@ static void makeRobot(int robotNum)
     printf("made robot %d\n",robotNum);
 }
 
+int inputFile(){
+
+  sprintf(filename, "./gene_data/%04d.csv", currentGeneration);
+  fp = fopen( filename, "r" );
+  if( fp == NULL ){
+    printf( "ファイルが開けません¥n");
+    return -1;
+  }
+
+  for (int i = 0; i < EXIST_ROBOT_NUM; ++i){
+      for (int j = 0; j < ACTION_NUM; ++j){
+          fscanf( fp, "%d,", &action[i][j]);
+      }
+  }
+  fclose(fp);
+  for (int i = 0; i < EXIST_ROBOT_NUM; ++i){
+    printf("---------------------\n");
+    printf("%d体目のロボット\n",i+1);
+      for (int j = 0; j < ACTION_NUM; ++j){
+          printf("%d,", action[i][j]);
+      }
+    printf("\n");
+  }
+
+  // while( (fscanf( fp, "%d,%d", &action[0], &action[1]) ) != EOF ){
+  //   printf( "%d %d\n", action[0],action[1]);
+  // }
+  return 0;
+}
+
 int main(int argc, char *argv[]){
     fn.version = DS_VERSION;
     fn.start   = &start;
@@ -1361,9 +1501,11 @@ int main(int argc, char *argv[]){
     //fn.path_to_textures = "../../drawstuff/textures";
     fn.path_to_textures = ".";
 
+    currentGeneration = atoi(argv[1]);
+
     dInitODE();
-
-
+    srand((unsigned) time(NULL));
+    inputFile();
 
     world  = dWorldCreate();
     space  = dHashSpaceCreate(0);
