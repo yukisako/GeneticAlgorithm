@@ -13,7 +13,7 @@ int main(int argc, char const *argv[])
     printf("error\n");
     exit(1);
   }
-  srand(10);
+  srand((unsigned) time(NULL));
 
   for (int i = 0; i < MAX_ROBOT_NUM; ++i){
     for (int j = 0; j < ACTION_NUM; ++j){

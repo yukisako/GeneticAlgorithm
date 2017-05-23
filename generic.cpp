@@ -1,21 +1,5 @@
-// 簡単！実践！ロボットシミュレーション
-// Open Dynamics Engineによるロボットプログラミング
-// 出村公成著, 森北出版 (2007) http://demura.net/
-// このプログラムは上本のサンプルプログラムです．
-// ヒューマノイドモデル：けんせいちゃん
-
-// kensei.cpp copyright by Kosei Demura (2007-2008)
-// This program is a sample program from the book as follows,
-// Robot Simulation - Robot programming with Open Dynamics Engine - (in Japanese)
-// by Kosei Demura, ISBN:978-4627846913, Morikita Publishing Co. Ltd, Tokyo 2007.
-// This humanoid model, Kensei-Chan, was named after my son.
-
-// Change Log
-// 2008-10-26: makeRobot()の修正。質量パラメータの計算をボディの形状と一致させた。
-//             足の位置が脛に大して前にあり転倒しやすかったので後方に変更。
-// 2008-10-23: nearCallback()の修正。摩擦モデルをクーロンモデルに変更　dContactApprox1
-//             けんせいちゃんの初期位置STARTX, STARTY　(kensei.h) できるよう変更
-// 2008-09-02: add dInitODE() and dCloseODE() for ODE-0.10.0
+//高速化のため，DrawRobot()及び標準入出力をコメントアウト
+//simu.shに-notexオプションを付けた．
 
 #include "original.h"
 #include <stdlib.h>
@@ -25,12 +9,13 @@
 
 double STARTY = 0.0;
 int robotNum = 0;
-#define EXIST_ROBOT_NUM 100
+#define EXIST_ROBOT_NUM 20
 
 
 int action[EXIST_ROBOT_NUM][ACTION_NUM];
 FILE *fp;
 FILE *record;
+FILE *max;
 int currentGeneration;
 char filename[100];
 
@@ -95,10 +80,11 @@ static void nearCallback(void *data, dGeomID o1, dGeomID o2)
     }
 }
 
-static void start()
-{
-    static float xyz[3] = {  2.35f, -1.05f, 0.5f};
-    static float hpr[3] = {145.0f,   3.0f, 0.0f};
+static void start(){
+    static float xyz[3] = {  5.35f, -2.05f, 0.5f};
+    static float hpr[3] = {120.0f,   3.0f, 0.0f};
+    // static float xyz[3] = {  2.35f, -1.05f, 0.5f};
+    // static float hpr[3] = {145.0f,   3.0f, 0.0f};
     dsSetViewpoint(xyz,hpr);
     dsSetSphereQuality(3);
 }
@@ -164,7 +150,8 @@ static void command(int cmd)
 
 static void control(int num, dReal target,int robotNum)
 {
-    dReal kp = 9.0, kd = 0.1, u, diff;
+    dReal kp = 6.0, kd = 0.1, u, diff;
+    // dReal kp = 9.0, kd = 0.1, u, diff;
     // printf("diff:%f\n", diff);
     diff = target * M_PI/180.0 - dJointGetHingeAngle(rjoint[robotNum][num].id);
     u    = kp * diff - kd * dJointGetHingeAngleRate(rjoint[robotNum][num].id);
@@ -175,7 +162,14 @@ static void control(int num, dReal target,int robotNum)
 static void controlMotor(int robotNum){
     // for (int robotNum = 0; robotNum < EXIST_ROBOT_NUM; robotNum++){
 
-
+        // if((robotNum == 1)&&(step[robotNum]==2)){
+        //     double *pos = (double *) dBodyGetPosition(rlink[robotNum][RIGHT_FOOT].id);
+        //     printf("【コントロールモータ始め】\n");
+        //     printf("左脚ピッチ角%f\n",left_foot_pitch_vec[robotNum] );
+        //     printf("左足首ピッチ角%f\n",left_knee_pitch_vec[robotNum] );
+        //     pos = (double *) dBodyGetPosition(rlink[robotNum][LEFT_FOOT].id);
+        //     printf("左足(%f,%f,%f)\n",pos[0],pos[1],pos[2] );
+        // }
         control(RIGHT_SHOULDER_YAW,   right_shoulder_yaw_vec[robotNum],robotNum);
         control(RIGHT_SHOULDER_ROLL,  right_shoulder_roll_vec[robotNum],robotNum);
         control(RIGHT_SHOULDER_PITCH, right_shoulder_pitch_vec[robotNum],robotNum);
@@ -196,6 +190,16 @@ static void controlMotor(int robotNum){
         control(LEFT_KNEE_PITCH,      left_knee_pitch_vec[robotNum],robotNum);
         control(LEFT_FOOT_PITCH,      left_foot_pitch_vec[robotNum],robotNum);
         control(LEFT_FOOT_ROLL,       left_foot_roll_vec[robotNum],robotNum);
+
+
+        // if((robotNum == 1)&&(step[robotNum]==2)){
+        //     double *pos = (double *) dBodyGetPosition(rlink[robotNum][RIGHT_FOOT].id);
+        //     printf("【コントロールモータ終わる】\n");
+        //     printf("左脚ピッチ角%f\n",left_foot_pitch_vec[robotNum] );
+        //     printf("左足首ピッチ角%f\n",left_knee_pitch_vec[robotNum] );
+        //     pos = (double *) dBodyGetPosition(rlink[robotNum][LEFT_FOOT].id);
+        //     printf("左足(%f,%f,%f)\n",pos[0],pos[1],pos[2] );
+        // }
 
 
         // control(RIGHT_SHOULDER_YAW,   0,robotNum);
@@ -318,72 +322,146 @@ static void drawRobot(int robotNum)
 
 void evaluation(){
     //ロボット個体の評価関数
-    //ロボットは3000ステップ経過時の左足のX座標で評価する
+    //ロボットは500ステップ経過時の左足のX座標で評価する
     int bestRobotNum = 0;
     int secondRobotNum = 1;
     double bestRobotX = 0;
     double secondRobotX = 0;
+    double bestScore = 0;
+    double secondScore = 0;
+    int continueNum = 0;
+    double score = 0;
     for (int robotNum = 0; robotNum < EXIST_ROBOT_NUM; ++robotNum){
         double *pos = (double *) dBodyGetPosition(rlink[robotNum][LEFT_FOOT].id);
-        if(bestRobotX < pos[0]){
-            //pos[0]がx座標
+        
+        //pos[0]がx座標，進んだ距離が高いかつ立っている状態で終わると評価を良くする
+        score = pos[0]+pos[2];
+        // score = pos[0];
+        if(bestScore < score){
+            //pos[0]がx座標，立っている状態で終わると評価を良くする
             bestRobotX = pos[0];
+            bestScore = score;
             bestRobotNum = robotNum;
-        } else if (secondRobotX < pos[0]){
+        } else if (secondScore < score){
             //1番ではないが2番のとき
             secondRobotX = pos[0];
+            secondScore = score;
             secondRobotNum = robotNum;
         }
         printf("ロボット%dのX=%f\n",robotNum,pos[0]);
     }
     
-    printf("トップが%d番の%f[m]，次が%d番の%f[m]です．\n",bestRobotNum,bestRobotX,secondRobotNum,secondRobotX);
-    if((record=fopen("record.txt","a"))==NULL){
+    printf("トップが%d番で%f点，歩行距離%f[m]，次が%d番で%f点，歩行距離%f[m]です．\n",bestRobotNum,bestScore,bestRobotX,secondRobotNum,secondScore,secondRobotX);
+    if((record=fopen("./gene_data/record.txt","a"))==NULL){
         printf("error\n");
         exit(1);
     }
-    fprintf(record,"%004d世代: 1位%f[m]，2位の%f[m]\n",  currentGeneration,bestRobotX,secondRobotX);
+
+    if((max=fopen("./gene_data/max.txt","r+"))==NULL){
+        printf("error\n");
+        exit(1);
+    }
+
+    // 以前の最大値
+    float lastBestScore;
+    fscanf(max, "%d,%f[point],", &continueNum,&lastBestScore);
+    printf("continueNum:%d\n",continueNum);
+    // printf("%f\n",lastMaxX);
+
+    // if(lastBestScore > bestScore){
+    //     //もし退化した場合，前の遺伝子と今回一番良かった遺伝子を交配
+    //     continueNum++;
+    //     printf("負けたので入れ替え\n");
+    //     for (int i = 0; i < ACTION_NUM; ++i)
+    //     {
+    //         action[secondRobotNum][i] = action[bestRobotNum][i];
+    //         fscanf(max, "%d,",&action[bestRobotNum][i]);
+    //     }
+    //     bestScore = lastBestScore;
+    // } else {
+    //     continueNum = 0;
+    // }
+
+    //デバッグ
+    // for (int i = 0; i < ACTION_NUM; ++i)
+    //   {
+    //       printf("%d",action[bestRobotNum][i]);
+    //   }
+
+    fprintf(record,"%004d世代:【1位】%.3f点,%.3f[m] 【2位】%.3f点,%.3f[m]\n",  currentGeneration,bestScore,bestRobotX,secondScore,secondRobotX);
+    // fprintf(record,"%004d世代:【1位】%.3f[m] 【2位】%.3f[m]\n",  currentGeneration,bestRobotX,secondRobotX);
     fclose(record);
 
-    printf("\n優勝のロボット%dアクション\n",bestRobotNum);
-    for (int i = 0; i < ACTION_NUM; ++i){
-        printf("%d,",action[bestRobotNum][i]);
-    }
+    // if((max=fopen("./gene_data/max.txt","w"))==NULL){
+    //     printf("error\n");
+    //     exit(1);
+    // }
+    // fprintf(max,"%d,%f[point],",continueNum, bestScore);
 
-    printf("\n準優勝ロボット%dアクション\n",secondRobotNum);
-    for (int i = 0; i < ACTION_NUM; ++i){
-        printf("%d,",action[secondRobotNum][i]);
-    }
+    // printf("\n優勝のロボット%dアクション\n",bestRobotNum);
+    // for (int i = 0; i < ACTION_NUM; ++i){
+    //     // printf("%d,",action[bestRobotNum][i]);
 
+    //     fprintf(max,"%d,",action[bestRobotNum][i]);
+    // }
+
+    // printf("\n準優勝ロボット%dアクション\n",secondRobotNum);
+    // for (int i = 0; i < ACTION_NUM; ++i){
+    //     printf("%d,",action[secondRobotNum][i]);
+    // }
+
+    // fclose(max);
 
     //2つの親から新しい個体を生成
     int newAction[EXIST_ROBOT_NUM][ACTION_NUM];
-
+    // int heni;
+    // if (((int)pow(1.3,continueNum)) > 300){
+    //     heni = 300;
+    // } else {
+    //     heni = (int)pow(1.3,continueNum);
+    // }
+    // printf("連続%d回，突然変異確率:%f,2番目確率:%f\n",continueNum,2.0/heni, 19.0/heni);
     for (int i = 0; i < EXIST_ROBOT_NUM; ++i){
         for (int j = 0; j < ACTION_NUM; ++j){
             int random = rand();
-            printf("random:%d\n",random );
-            if(random % 200 == 0){
+            // printf("%d\n",random );
+            // if(random % 10000 < 200.0/heni){ //%33,%(100+continueNum*10),(random % heni == 0)
+            if(random % 100 == 1 ){
+                //0.5%の確率で突然変異
                 //突然変異
                 newAction[i][j] = rand()%8;
-            } else if(random % 2 == 0){
-                newAction[i][j] = action[bestRobotNum][j];
-            } else {
+                // printf("突然変異:newAction[%d][%d] = %d\n",i,j,newAction[i][j]);
+            } else if(random % 100 < 19){ //(random % 10000 < 1900/heni)
+                //29%の確率で2番目の遺伝子を受け継ぐ
                 newAction[i][j] = action[secondRobotNum][j];
+                // printf("2番目:newAction[%d][%d] = %d\n",i,j,newAction[i][j]);
+            } else {
+                //80%の確率で1番目の遺伝子を受け継ぐ
+                //可変で，どんどん確率は上がる
+                newAction[i][j] = action[bestRobotNum][j];
+                // printf("1番目:newAction[%d][%d] = %d\n",i,j,newAction[i][j]);
+
             }
         }
     }
 
+
+    //今回最高だったものはそのまま引き継ぐ
+    for (int i = 0; i < ACTION_NUM; ++i){
+        newAction[bestRobotNum][i] = action[bestRobotNum][i];
+    }
+
+
     currentGeneration++;
     //新個体
-    for (int i = 0; i < EXIST_ROBOT_NUM; ++i){
-        printf("------------------\n");
-        printf("%d番目の新しいロボット\n",i );
-        for (int j = 0; j < ACTION_NUM; ++j){
-            printf("%d,",newAction[i][j] );
-        }
-        printf("\n");
-    }
+    // for (int i = 0; i < EXIST_ROBOT_NUM; ++i){
+    //     printf("------------------\n");
+    //     printf("%d番目の新しいロボット\n",i );
+    //     for (int j = 0; j < ACTION_NUM; ++j){
+    //         printf("%d,",newAction[i][j] );
+    //     }
+    //     printf("\n");
+    // }
 
 
     sprintf(filename, "./gene_data/%04d.csv", currentGeneration);
@@ -399,7 +477,7 @@ void evaluation(){
         }
         fprintf(fp,"\n");
       }
-
+    fclose(fp);
     exit(0);
 }
 
@@ -418,6 +496,7 @@ static void simLoop(int pause)
 
     for (int robotNum = 0; robotNum < EXIST_ROBOT_NUM; robotNum++){
         // printf("r_knee[%d]:%f\n",robotNum,r_knee[robotNum]);
+
         if (step[robotNum] < ACTION_NUM){
             r_knee[robotNum] = 180.0 * dJointGetHingeAngle(rjoint[robotNum][RIGHT_KNEE_PITCH].id)/ M_PI;
             // if (sw[robotNum] == 0 && r_knee[robotNum] >   knee_angle2[robotNum] -1){
@@ -436,81 +515,114 @@ static void simLoop(int pause)
             // printf("sw[%d]=%d\n",robotNum,sw[robotNum]);
 
 
-            printf("%d体目の%dステップが%d",robotNum,step[robotNum],action[robotNum][step[robotNum]]);
-            step[robotNum]++;
+            //printf("%d体目の%dステップが%d",robotNum,step[robotNum],action[robotNum][step[robotNum]]);
+
+
+                // printf("%d体目の%dステップが%d\n",robotNum,step[robotNum],action[robotNum][step[robotNum]]);
+                // double *pos = (double *) dBodyGetPosition(rlink[robotNum][LEFT_FOOT].id);
+                // printf("ロボット%dのstep%dでのX=%f\n",robotNum,step[robotNum],pos[0]);
+            // if((robotNum == 1)&&(step[robotNum]==2)){
+            //     double *pos = (double *) dBodyGetPosition(rlink[robotNum][RIGHT_FOOT].id);
+            //     printf("【simLoop内】\n");
+            //     printf("knee_angle2[robotNum] = %f\n",knee_angle2[robotNum]);
+            //     printf("左脚ピッチ角%f\n",left_foot_pitch_vec[robotNum] );
+            //     printf("左足首ピッチ角%f\n",left_knee_pitch_vec[robotNum] );
+            //     pos = (double *) dBodyGetPosition(rlink[robotNum][LEFT_FOOT].id);
+            //     printf("左足(%f,%f,%f)\n",pos[0],pos[1],pos[2] );
+            // }
+
+
             switch (action[robotNum][step[robotNum]]){
             case 0:
-                left_hip_pitch       = -100.0;
-                left_knee_pitch      =  knee_angle2[robotNum];
-                left_foot_pitch      =  -75.0;
-                left_shoulder_roll   =  120.0;
-                left_shoulder_pitch  =   30.0;
+                left_hip_pitch_vec[robotNum]       = -110.0; //100
+                left_knee_pitch_vec[robotNum]      =  knee_angle2[robotNum];
+                left_foot_pitch_vec[robotNum]      =  -85.0; //-75
+                left_shoulder_roll_vec[robotNum]   =  130.0; //-120
+                left_shoulder_pitch_vec[robotNum]  =   35.0; //30
                 break;
             case 1:
-                right_hip_pitch       = -100.0;
-                right_knee_pitch      =  knee_angle2[robotNum];
-                right_foot_pitch      =  -75.0;
-                right_shoulder_roll   =  120.0;
-                right_shoulder_pitch  =   30.0;
+                // if((robotNum == 1)&&(step[robotNum]==2)){
+                //     double *pos = (double *) dBodyGetPosition(rlink[robotNum][RIGHT_FOOT].id);
+                //     printf("【case内】\n");
+                //     printf("knee_angle2[robotNum] = %f\n",knee_angle2[robotNum]);
+                //     printf("左脚ピッチ角%f\n",left_foot_pitch_vec[robotNum] );
+                //     printf("左足首ピッチ角%f\n",left_knee_pitch_vec[robotNum] );
+                //     pos = (double *) dBodyGetPosition(rlink[robotNum][LEFT_FOOT].id);
+                //     printf("左足(%f,%f,%f)\n",pos[0],pos[1],pos[2] );
+                // }
+                //knee_angle2の違いはどこから？
+
+                right_hip_pitch_vec[robotNum]       = -110.0;
+                right_knee_pitch_vec[robotNum]      =  knee_angle2[robotNum];
+                right_foot_pitch_vec[robotNum]      =  -85.0;
+                right_shoulder_roll_vec[robotNum]   =  -130.0;
+                right_shoulder_pitch_vec[robotNum]  =   35.0;
                 break;
             case 2:
-                left_hip_pitch       =  0.0;
-                left_knee_pitch      =  0.0;
-                left_foot_pitch      =  0.0;
-                left_shoulder_roll   =  0.0;
-                left_shoulder_pitch  = - 90.0;
+                left_hip_pitch_vec[robotNum]       =  0.0;
+                left_knee_pitch_vec[robotNum]      =  0.0;
+                left_foot_pitch_vec[robotNum]      =  0.0;
+                left_shoulder_roll_vec[robotNum]   =  0.0;
+                left_shoulder_pitch_vec[robotNum]  = - 90.0;
                 break;
             case 3:
-                right_hip_pitch       =  0.0;
-                right_knee_pitch      =  0.0;
-                right_foot_pitch      =  0.0;
-                right_shoulder_roll   =  0.0;
-                right_shoulder_pitch  = - 90.0;
+                right_hip_pitch_vec[robotNum]       =  0.0;
+                right_knee_pitch_vec[robotNum]      =  0.0;
+                right_foot_pitch_vec[robotNum]      =  0.0;
+                right_shoulder_roll_vec[robotNum]   =  0.0;
+                right_shoulder_pitch_vec[robotNum]  = - 90.0;
                 break;
             case 4:
-                left_hip_pitch       = -100.0;
-                left_knee_pitch      =  120.0;
-                left_foot_pitch      =  -65,0; // - 65.0;
-                left_shoulder_roll   =  180.0;
-                left_shoulder_pitch  = - 90.0;
+                left_hip_pitch_vec[robotNum]       = -100.0;
+                left_knee_pitch_vec[robotNum]      =  120.0;
+                left_foot_pitch_vec[robotNum]      =  -65,0; // - 65.0;
+                left_shoulder_roll_vec[robotNum]   =  180.0;
+                left_shoulder_pitch_vec[robotNum]  = - 90.0;
                 break;
             case 5:
-                right_hip_pitch       = -100.0;
-                right_knee_pitch      =  120.0;
-                right_foot_pitch      =  -65,0; // - 65.0;
-                right_shoulder_roll   =  180.0;
-                right_shoulder_pitch  = - 90.0;
+                right_hip_pitch_vec[robotNum]       = -100.0;
+                right_knee_pitch_vec[robotNum]      =  120.0;
+                right_foot_pitch_vec[robotNum]      =  -65,0; // - 65.0;
+                right_shoulder_roll_vec[robotNum]   =  -180.0;
+                right_shoulder_pitch_vec[robotNum]  = - 90.0;
                 break;
             case 6:
                 // if (step[robotNum] < recovery_step){
-                    left_hip_pitch       = - 100 + step[robotNum] * 100 / recovery_step;
-                    right_hip_pitch      =   left_hip_pitch;
-                    left_knee_pitch      =   120 - step[robotNum] * 120 / recovery_step;
-                    right_knee_pitch     =   left_knee_pitch;
-                    left_foot_pitch      = - 65 + step[robotNum] *  60 / recovery_step;
-                    right_foot_pitch     =   left_foot_pitch;
+                    left_hip_pitch_vec[robotNum]       = - 100 + step[robotNum] * 100 / recovery_step;
+                    right_hip_pitch_vec[robotNum]      =   left_hip_pitch;
+                    left_knee_pitch_vec[robotNum]      =   120 - step[robotNum] * 120 / recovery_step;
+                    right_knee_pitch_vec[robotNum]     =   left_knee_pitch;
+                    left_foot_pitch_vec[robotNum]      = - 65 + step[robotNum] *  60 / recovery_step;
+                    right_foot_pitch_vec[robotNum]     =   left_foot_pitch;
                 // }
 
             case 7:
                 // } else{
-                left_hip_pitch       =  0.0;
-                right_hip_pitch      =  left_hip_pitch;
-                left_knee_pitch      =  0.0;
-                right_knee_pitch     =  left_knee_pitch;
-                left_foot_pitch      =  -9.0;
-                right_foot_pitch     =  left_foot_pitch;
+                left_hip_pitch_vec[robotNum]       =  0.0;
+                right_hip_pitch_vec[robotNum]      =  left_hip_pitch;
+                left_knee_pitch_vec[robotNum]      =  0.0;
+                right_knee_pitch_vec[robotNum]     =  left_knee_pitch;
+                left_foot_pitch_vec[robotNum]      =  -9.0;
+                right_foot_pitch_vec[robotNum]     =  left_foot_pitch;
 
                 //     //最初へ
                 //     sw[robotNum] = 0;
                 //     step[robotNum] = 0;
                 // }
-                left_shoulder_roll   =   0.0;
-                right_shoulder_roll  =   left_shoulder_roll;
-                left_shoulder_pitch  =   0.0;
-                right_shoulder_pitch =   left_shoulder_pitch;
+                left_shoulder_roll_vec[robotNum]   =   0.0;
+                right_shoulder_roll_vec[robotNum]  =   left_shoulder_roll;
+                left_shoulder_pitch_vec[robotNum]  =   0.0;
+                right_shoulder_pitch_vec[robotNum] =   left_shoulder_pitch;
                 break;
             }
+            if(robotNum == 2){
+                printf("%d\n",step[robotNum] );
+            }
+            if(step[robotNum] > 170){
+                step[robotNum] = 0;
+            }
 
+            // printf("膝の角度%f\n",knee_angle2[robotNum] );
             // left_hip_pitch_vec[robotNum] =  0;
             // right_hip_pitch_vec[robotNum] =  0;
             // left_knee_pitch_vec[robotNum]      =  0;
@@ -525,38 +637,68 @@ static void simLoop(int pause)
             // right_shoulder_roll_vec[robotNum]  =  0;
             // left_shoulder_pitch_vec[robotNum]  =  0;
             // right_shoulder_pitch_vec[robotNum] =  0;
+            // if((robotNum == 1)&&(step[robotNum]==2)){
+            //     printf("関節動かしたよ\n");
+            //     printf("膝の角度%f\n",knee_angle2[robotNum] );
+            // }
 
-            left_hip_pitch_vec[robotNum] =  left_hip_pitch;
-            right_hip_pitch_vec[robotNum] =  right_hip_pitch;
-            left_knee_pitch_vec[robotNum]      =  left_knee_pitch;
-            right_knee_pitch_vec[robotNum]     =  right_knee_pitch;
-            left_foot_pitch_vec[robotNum]      =  left_foot_pitch;
-            right_foot_pitch_vec[robotNum]     =  right_foot_pitch;
-            left_shoulder_roll_vec[robotNum]   =  left_shoulder_roll;
-            right_shoulder_roll_vec[robotNum]  =  right_shoulder_roll;
-            left_shoulder_pitch_vec[robotNum]  =  left_shoulder_pitch;
-            right_shoulder_pitch_vec[robotNum] =  right_shoulder_pitch;
-            left_shoulder_roll_vec[robotNum]   =  left_shoulder_roll;
-            right_shoulder_roll_vec[robotNum]  =  right_shoulder_roll;
-            left_shoulder_pitch_vec[robotNum]  =  left_shoulder_pitch;
-            right_shoulder_pitch_vec[robotNum] =  right_shoulder_pitch;
+            // if((robotNum == 1)&&(step[robotNum]==2)){
+            //     double *pos = (double *) dBodyGetPosition(rlink[robotNum][RIGHT_FOOT].id);
+            //     printf("【ここか？】\n");
+            //     printf("knee_angle2[robotNum] = %f\n",knee_angle2[robotNum]);
+            //     printf("左脚ピッチ角%f\n",left_foot_pitch_vec[robotNum] );
+            //     printf("左足首ピッチ角%f\n",left_knee_pitch_vec[robotNum] );
+            //     pos = (double *) dBodyGetPosition(rlink[robotNum][LEFT_FOOT].id);
+            //     printf("左足(%f,%f,%f)\n",pos[0],pos[1],pos[2] );
+            // }
 
+            // left_hip_pitch_vec[robotNum] =  left_hip_pitch;
+            // right_hip_pitch_vec[robotNum] =  right_hip_pitch;
+            // left_knee_pitch_vec[robotNum]      =  left_knee_pitch;
+            // right_knee_pitch_vec[robotNum]     =  right_knee_pitch;
+            // left_foot_pitch_vec[robotNum]      =  left_foot_pitch;
+            // right_foot_pitch_vec[robotNum]     =  right_foot_pitch;
+            // left_shoulder_roll_vec[robotNum]   =  left_shoulder_roll;
+            // right_shoulder_roll_vec[robotNum]  =  right_shoulder_roll;
+            // left_shoulder_pitch_vec[robotNum]  =  left_shoulder_pitch;
+            // right_shoulder_pitch_vec[robotNum] =  right_shoulder_pitch;
+            // left_shoulder_roll_vec[robotNum]   =  left_shoulder_roll;
+            // right_shoulder_roll_vec[robotNum]  =  right_shoulder_roll;
+            // left_shoulder_pitch_vec[robotNum]  =  left_shoulder_pitch;
+            // right_shoulder_pitch_vec[robotNum] =  right_shoulder_pitch;
 
+            // if((robotNum == 1)&&(step[robotNum]==2)){
+            //     double *pos = (double *) dBodyGetPosition(rlink[robotNum][RIGHT_FOOT].id);
+            //     printf("【case文終わり，control前】\n");
+            //     printf("knee_angle2[robotNum] = %f\n",knee_angle2[robotNum]);
+            //     printf("左脚ピッチ角%f\n",left_foot_pitch_vec[robotNum] );
+            //     printf("左足首ピッチ角%f\n",left_knee_pitch_vec[robotNum] );
+            //     pos = (double *) dBodyGetPosition(rlink[robotNum][LEFT_FOOT].id);
+            //     printf("左足(%f,%f,%f)\n",pos[0],pos[1],pos[2] );
+            // }
+
+            // printf("%dの%dステップ目は%d\n",robotNum,step[robotNum],action[robotNum][step[robotNum]] );
             controlMotor(robotNum);
+            
 
+            step[robotNum]++;
             // printf("%d\n",robotNum );
         } else {
+            // step[robotNum] = 0;
             evaluation();
         }
         dJointGroupEmpty(contactgroup);
-        drawRobot(robotNum);
-        printf("\n");
+        //ここがロボットの描画(高速化のためコメントアウト)
+        if(robotNum == 2){
+            drawRobot(robotNum);
+        }
+        // printf("\n");
         // printf("sw=%2d right knee=%5.1f right hip=%5.1f\r",sw[robotNum], r_knee[robotNum], r_hip[robotNum]);
         // printf("sw=%2d right foot=%5.1f left foot=%5.1f\n",sw[robotNum], right_foot_pitch_vec[robotNum], left_foot_pitch_vec[robotNum]);
         // printf("sw=%2d right hip =%5.1f left hip  =%5.1f\n",sw[robotNum], right_hip_pitch_vec[robotNum],  left_hip_pitch_vec[robotNum]);
     }
             dSpaceCollide(space,0,&nearCallback);
-            dWorldStep(world,0.005);
+            dWorldStep(world,0.009);
 }
 
 
@@ -566,7 +708,7 @@ static void simLoop(int pause)
 static void readLinkParam(int robotNum)
 {
     STARTY = robotNum*3;
-    printf("%f\n", STARTY);
+    // printf("%f\n", STARTY);
     rlink[robotNum][TORSO].lx = TORSO_LENGTH;
     rlink[robotNum][TORSO].ly = TORSO_WIDTH;
     rlink[robotNum][TORSO].lz = TORSO_HEIGHT;
@@ -711,7 +853,7 @@ static void readLinkParam(int robotNum)
     rlink[robotNum][LEFT_FOOT].ly   = FOOT_WIDTH;
     rlink[robotNum][LEFT_FOOT].lz   = FOOT_HEIGHT;
     rlink[robotNum][LEFT_FOOT].m    = FOOT_MASS;
-    rlink[robotNum][LEFT_FOOT].px   = rlink[robotNum][LEFT_FOOT_DUMMY].px + 0.5 * FOOT_LENGTH - CALF_LENGTH;
+    rlink[robotNum][LEFT_FOOT].px   = rlink[robotNum][LEFT_FOOT_DUMMY].px + 0.5 * FOOT_LENGTH - CALF_LENGTH - 0.03; //0.003引いた
     rlink[robotNum][LEFT_FOOT].py   = rlink[robotNum][LEFT_FOOT_DUMMY].py;
     rlink[robotNum][LEFT_FOOT].pz   = rlink[robotNum][LEFT_FOOT_DUMMY].pz - 0.5 * (FOOT_HEIGHT + JOINT_SIZE);
 
@@ -1415,7 +1557,7 @@ static void makeRobot(int robotNum)
     for (int i=0; i< BODY_NUM; i++)
     {
         rlink[robotNum][i].id = dBodyCreate(world);
-        printf("%d:id:%d\n", robotNum,rlink[robotNum][i].id );
+        // printf("%d:id:%d\n", robotNum,rlink[robotNum][i].id );
         dBodySetPosition(rlink[robotNum][i].id, rlink[robotNum][i].px, rlink[robotNum][i].py, rlink[robotNum][i].pz);
 
         if ((i == HEAD) ||  (i == LEFT_HAND) || (i == RIGHT_HAND))
@@ -1460,7 +1602,7 @@ static void makeRobot(int robotNum)
         dJointSetHingeParam(rjoint[robotNum][i].id, dParamFMax,   rjoint[robotNum][i].fmax);
         dJointSetHingeParam(rjoint[robotNum][i].id, dParamFudgeFactor, FUDGE_FACTOR);
     }
-    printf("made robot %d\n",robotNum);
+    // printf("made robot %d\n",robotNum);
 }
 
 int inputFile(){
@@ -1478,14 +1620,14 @@ int inputFile(){
       }
   }
   fclose(fp);
-  for (int i = 0; i < EXIST_ROBOT_NUM; ++i){
-    printf("---------------------\n");
-    printf("%d体目のロボット\n",i+1);
-      for (int j = 0; j < ACTION_NUM; ++j){
-          printf("%d,", action[i][j]);
-      }
-    printf("\n");
-  }
+  // for (int i = 0; i < EXIST_ROBOT_NUM; ++i){
+  //   printf("---------------------\n");
+  //   printf("%d体目のロボット\n",i+1);
+  //     for (int j = 0; j < ACTION_NUM; ++j){
+  //         printf("%d,", action[i][j]);
+  //     }
+  //   printf("\n");
+  // }
 
   // while( (fscanf( fp, "%d,%d", &action[0], &action[1]) ) != EOF ){
   //   printf( "%d %d\n", action[0],action[1]);
@@ -1523,7 +1665,8 @@ int main(int argc, char *argv[]){
     }
 
     dsSimulationLoop(argc, argv, 800, 600, &fn);
-
+    //描画高速化のためWindowをなくす
+    // dsSimulationLoop(argc, argv, 10, 7, &fn);
     dJointGroupDestroy(contactgroup);
     dSpaceDestroy(space);
     dWorldDestroy(world);

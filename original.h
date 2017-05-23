@@ -6,6 +6,7 @@
 #include "drawstuff/drawstuff.h"
 
 #define ACTION_NUM 1000
+#define MAX_ROBOT_NUM 20
 
 #ifdef dDOUBLE
 #define dsDrawBox      dsDrawBoxD
@@ -16,7 +17,7 @@
 
 #define BODY_NUM  25    // number of links (body parts)
 #define JOINT_NUM 24      // number of joints
-#define MAX_ROBOT_NUM 100
+
 
 #define STARTX            0.0    // Initial position of Robot
 // #define STARTY            0.0    // Initial position of Robot
@@ -24,38 +25,38 @@
 #define TORSO_LENGTH      0.25   // x axis
 #define TORSO_WIDTH       0.27   // y axis
 #define TORSO_HEIGHT      0.25   // z axis
-#define TORSO_MASS        10.0
+#define TORSO_MASS        10.0  //10.0
 
 #define NECK_LENGTH       0.05
 #define NECK_WIDTH        0.05
 #define NECK_HEIGHT       0.10
-#define NECK_MASS         0.1
+#define NECK_MASS         0.1 //0.1
 
 #define HEAD_LENGTH       0.3
 #define HEAD_WIDTH        0.3
 #define HEAD_HEIGHT       0.3
 #define HEAD_RADIUS       0.25
-#define HEAD_MASS         2.5
+#define HEAD_MASS         2.5 //2.5
 
 #define SHOULDER_RADIUS   0.1
 
 #define UPPER_ARM_LENGTH  0.04
 #define UPPER_ARM_WIDTH   0.04
 #define UPPER_ARM_HEIGHT  0.10
-#define UPPER_ARM_MASS    0.5
+#define UPPER_ARM_MASS    0.5 //0.5
 
 #define ELBOW_RADIUS      0.1
 
 #define FORE_ARM_LENGTH   0.05
 #define FORE_ARM_WIDTH    0.05
 #define FORE_ARM_HEIGHT   0.10
-#define FORE_ARM_MASS     0.5
+#define FORE_ARM_MASS     0.5 //0.5
 
 #define HAND_LENGTH       0.1
 #define HAND_WIDTH        0.1
 #define HAND_HEIGHT       0.1
 #define HAND_RADIUS       0.075
-#define HAND_MASS         0.2
+#define HAND_MASS         0.2 //0.2
 
 #define HIP_RADIUS        0.1
 #define HIP_JT_WIDTH      0.17  // Distance between Hip joints
@@ -63,21 +64,21 @@
 #define THIGH_LENGTH      0.06
 #define THIGH_WIDTH       0.06
 #define THIGH_HEIGHT      0.25
-#define THIGH_MASS        5.0
+#define THIGH_MASS        10.0 //5.0
 
 #define KNEE_RADIUS       0.1
 
 #define CALF_LENGTH       0.07 //もとは0.07
 #define CALF_WIDTH        0.07 //もとは0.07
 #define CALF_HEIGHT       0.2
-#define CALF_MASS         2.0
+#define CALF_MASS         4.0 //2.0
 
 #define ANKLE_RADIUS      0.1
 
 #define FOOT_LENGTH       0.35 //もとは0.25
-#define FOOT_WIDTH        0.15 //もとは0.15
+#define FOOT_WIDTH        0.18 //もとは0.15
 #define FOOT_HEIGHT       0.05 //もとは0.05
-#define FOOT_MASS         0.5
+#define FOOT_MASS         2.0  //0.5
 
 #define JOINT_SIZE        0.0001
 #define JOINT_MASS        0.0001
